@@ -17,6 +17,10 @@ resource "aws_instance" "ex-1" {
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16" # VPC IP Network
   tags = {
-    Name = "VPC-Practica" # VPC Name
+    Name = "VPC-Main" # VPC Name
   }
+}
+
+resource "aws_subnet" "name" {
+  
 }
