@@ -51,6 +51,6 @@ resource "aws_instance" "subnet-instances" {
     floor(count.index / 2) # Floors the index/2 (1.9->1). Changes the subnet id every 2 instances.
   )
   tags = {
-    Name = "Instancia-${count.index + 1}"
+    Name = "Ex2-Instance-${count.index + 1}"
   }
 }
