@@ -53,3 +53,4 @@ resource "aws_instance" "subnet-instances" {
   tags = {
     Name = "Instancia-${count.index + 1}"
   }
+}
