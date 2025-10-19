@@ -3,6 +3,7 @@ provider "aws" {
     region = "us-east-1"
 }
 
+## Ex 1
 # Create EC2 instance
 resource "aws_instance" "ex-1" {
     instance_type = "t3.micro"
@@ -10,16 +11,20 @@ resource "aws_instance" "ex-1" {
     count = 2 # Specifies n instances to be created
 
     tags = {
-      Name = "Exercici 1 - ${count.index + 1}" # count.index starts from 0 to n_instances-1
+      Name = "Ex1-Inst-${count.index + 1}" # count.index starts from 0 to n_instances-1
       # Names each instance "Exercici 1 - {n-instance}"
     }
 }
 
+## Ex 2
+
+# Create VPC
 resource "aws_vpc" "main" { # Important to distinguish between the Terraform intern name and the Amazon AWS Name tag
   cidr_block = "10.0.0.0/16" # VPC Network ID
   tags = { Name = "main-vpc" } # VPC Name
 }
 
+# Create Subnets
 resource "aws_subnet" "subnetA" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.32.0/25" # Subnet Network ID
@@ -41,6 +46,7 @@ resource "aws_subnet" "subnetC" {
   tags = { Name = "SubnetC" }
 }
 
+# Create 6 instances, 2 in each subnet
 resource "aws_instance" "subnet-instances" {
   count         = 6
   ami           = "ami-052064a798f08f0d3"
@@ -51,6 +57,6 @@ resource "aws_instance" "subnet-instances" {
     floor(count.index / 2) # Floors the index/2 (1.9->1). Changes the subnet id every 2 instances.
   )
   tags = {
-    Name = "Ex2-Instance-${count.index + 1}"
+    Name = "Ex2-Inst-${count.index + 1}"
   }
 }
