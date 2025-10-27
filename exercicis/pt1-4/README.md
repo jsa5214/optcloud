@@ -23,4 +23,6 @@
 
 ## Ping
 ### It works when pinging one instance to another using private IP's. But it fails when pinging using the public IP's
-!(assets/ping.PNG)
+![](assets/ping.PNG)
+
+
