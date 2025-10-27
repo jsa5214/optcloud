@@ -8,7 +8,7 @@
 <img src="assets/routing_table.PNG">
 
 <h1>Security Groups</h1>
-<img src="assets/security_gropus.PNG">
+<img src="assets/security_groups.PNG">
 
 <h1>Instances</h1>
 <img src="assets/instances.png">
