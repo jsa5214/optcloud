@@ -6,7 +6,7 @@ provider "aws" {
 # ---------- VPC ----------
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
-  tags       = { name = "VPC_03" }
+  tags       = { Name = "VPC_03" }
 }
 
 # ---------- SUBNETS ----------
@@ -15,7 +15,7 @@ resource "aws_subnet" "SubnetA" {
   availability_zone       = "us-east-1a"
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true # Autoassign public IP on launch
-  tags                    = { name = "Public Subnet A" }
+  tags                    = { Name = "Public Subnet A" }
 }
 
 resource "aws_subnet" "SubnetB" {
@@ -23,25 +23,25 @@ resource "aws_subnet" "SubnetB" {
   availability_zone       = "us-east-1b"
   cidr_block              = "10.0.2.0/24"
   map_public_ip_on_launch = true
-  tags                    = { name = "Public Subnet B" }
+  tags                    = { Name = "Public Subnet B" }
 
 }
 
 # ---------- INTERNET GATEWAY ----------
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-  tags   = { name = "igw-vpc_03" }
+  tags   = { Name = "igw-vpc_03" }
 
 }
 
 # ---------- ROUTING TABLE ----------
 resource "aws_route_table" "rt_tbl" {
   vpc_id = aws_vpc.main.id
-  route = {
+  route {
     cidr_block = "0.0.0.0/0" # Redirect all the traffic to the gateway
     gateway_id = aws_internet_gateway.igw.id
   }
-  tags = { name = "Public Routing Table" }
+  tags = { Name = "Public Routing Table" }
 
 
 }
@@ -76,7 +76,7 @@ resource "aws_security_group" "sg_vpc_03" {
     from_port   = -1 # Code to allow all ICMP traffic
     to_port     = -1
     protocol    = "icmp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   egress {
@@ -88,24 +88,24 @@ resource "aws_security_group" "sg_vpc_03" {
 
   }
 
-  tags = { name = "sg_vpc_03" }
+  tags = { Name = "sg_vpc_03" }
 }
 
 # ---------- EC2 INSTANCES ----------
 resource "aws_instance" "ec2-a" {
-  ami                    = "ami-052064a798f08f0d"
+  ami                    = "ami-052064a798f08f0d3"
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.SubnetA.id
   key_name               = "vockey"
   vpc_security_group_ids = [aws_security_group.sg_vpc_03.id]
-  tags                   = { name = "ec2-a" }
+  tags                   = { Name = "ec2-a" }
 }
 
 resource "aws_instance" "ec2-b" {
-  ami                    = "ami-052064a798f08f0d"
+  ami                    = "ami-052064a798f08f0d3"
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.SubnetB.id
   key_name               = "vockey"
   vpc_security_group_ids = [aws_security_group.sg_vpc_03.id]
-  tags                   = { name = "ec2-b" }
+  tags                   = { Name = "ec2-b" }
 }
