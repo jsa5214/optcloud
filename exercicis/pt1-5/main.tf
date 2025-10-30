@@ -65,9 +65,7 @@ resource "aws_route_table" "rt_tbl" {
 resource "aws_route_table_association" "rta" {
   route_table_id = aws_route_table.rt_tbl.id
   count          = var.subnet_count
-  subnet_id      = aws_subnet.private_subnet[count.index].id
-
-
+  subnet_id      = aws_subnet.public_subnet[count.index].id
 }
 
 
@@ -92,7 +90,7 @@ resource "aws_security_group" "sg_vpc_main" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip] # Omitim que es la IP real y no 0.0.0.0
+    cidr_blocks = [var.my_ip] # Ometem que es la IP real y no 0.0.0.0
   }
 
   ingress {
@@ -140,12 +138,13 @@ resource "aws_instance" "ec2_public" {
 # ---------- S3 BUCKET ----------
 resource "aws_s3_bucket" "s3_bucket" {
     count = var.create_s3_bucket ? 1 : 0 # Conditional ternari structure. 
-    bucket = "${var.project_name}_bucket"
+    bucket = "${var.project_name}-bucket"
     tags = {
         Name = "Bucket"
-    }
-  
+    }  
 }
+
+
 
 
 
