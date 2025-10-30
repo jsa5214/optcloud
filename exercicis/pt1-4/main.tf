@@ -52,11 +52,6 @@ resource "aws_route_table_association" "rta_a" {
   subnet_id      = aws_subnet.SubnetA.id
 }
 
-resource "aws_route_table_association" "rta_b" {
-  route_table_id = aws_route_table.rt_tbl.id
-  subnet_id      = aws_subnet.SubnetB.id
-}
-
 # ---------- SECURITY GROUPS ----------
 resource "aws_security_group" "sg_vpc_03" {
   name        = "sg_vpc_03"
