@@ -34,3 +34,4 @@ output "s3_bucket_name" {
   description = "Bucket Name"
   value       = var.create_s3_bucket ? aws_s3_bucket.s3_bucket[0].bucket : "S3 bucket creation is set to false"
 }
+
