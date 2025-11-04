@@ -6,7 +6,8 @@ locals {
   azs = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"] # List with all the azs
 
   public_subnets = {
-    # Generates a map (key, values[]) that contains the subnets 
+    # "key => value" in the for loop dinamically generates a map {public_us-east-1a => {cidr"...", az="..."}, that contains the subnets 
+    #                                                             public_us-east-1b => {cidr"...", az="..."}}
     for i in range(var.subnet_count) :
     "public_${local.azs[i]}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i)
@@ -22,7 +23,16 @@ locals {
     }
   }
 
-  # The nested for generates a nested list (unusable for a for_each structure, so flatten is used to merge the list of lists into a single list) / flatten([[1,2],[3,4]]) -> [1,2,3,4]
+  public_instances = flatten([
+  # The nested for generates a list of lists of objects (unusable for a for_each structure, so flatten is used to merge the lists into a single list that contains all the objects) / flatten([[1,2],[3,4]]) -> [1,2,3,4]
+    for subnet_key, subnet in aws_subnet.public_subnet : [
+      for i in range(var.instance_count) : {
+        key       = "${subnet_key}_${i + 1}"
+        subnet_id = subnet.id
+      }
+    ]
+  ])
+
   # After the flatten each element represents a EC2 instance
   # [                                                             to    [
   #   [ {key="public-us-east-1a-1", subnet_id="...", number=1},           {key="public-us-east-1a-1", subnet_id="...", number=1},
@@ -31,22 +41,11 @@ locals {
   #     {key="public-us-east-1b-2", subnet_id="...", number=2} ]          {key="public-us-east-1b-2", subnet_id="...", number=2}
   # ]                                                                   ]
 
-  public_instances = flatten([
-    for subnet_key, subnet in aws_subnet.public_subnet : [
-      for i in range(var.instance_count) : {
-        key       = "${subnet_key}_${i + 1}"
-        subnet_id = subnet.id
-        number    = i + 1
-      }
-    ]
-  ])
-
   private_instances = flatten([
     for subnet_key, subnet in aws_subnet.private_subnet : [
       for i in range(var.instance_count) : {
         key       = "${subnet_key}_${i + 1}"
         subnet_id = subnet.id
-        number    = i + 1
       }
     ]
   ])

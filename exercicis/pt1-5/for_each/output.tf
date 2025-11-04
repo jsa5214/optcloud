@@ -4,9 +4,15 @@
 
 # ---------- OUTPUTS EC2 ----------
 output "public_instance_ids" {
-  description = "EC2 public instances ID's"
-  value       = aws_instance.ec2_public[*].id
+  description = "IDs of public EC2 instances"
+  #  inst_key, inst pair example // inst_key => instance object
+  #  "public-us-east-1a-1" = { id = "i-0123456789abcdef0", public_ip = "54.45.12.34", private_ip = "10.0.1.10" }
+  value = {
+    for inst_key, inst in aws_instance.ec2_public :
+    inst_key => inst.id
+  }
 }
+
 
 output "public_instance_public_ips" {
   description = "EC2 public instances public IP's"
