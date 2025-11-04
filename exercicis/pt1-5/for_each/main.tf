@@ -202,8 +202,7 @@ resource "aws_s3_bucket" "s3_bucket" {
   # Bucket name must be unique in the whole AWS structure so we use a random_id generator to avoid issues.
   bucket = "${var.project_name}-bucket-${random_id.suffix.hex}"
   tags = {
-    Name = "${var.project_name}_Bucket"
-
+    Name = "${var.project_name}_s3_bucket"
     Project = var.project_name
   }
 }

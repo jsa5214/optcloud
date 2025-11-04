@@ -10,7 +10,7 @@ resource "aws_vpc" "main" {
 # ---------- SUBNETS ----------
 resource "aws_subnet" "public_subnet" {
   vpc_id            = aws_vpc.main.id
-  availability_zone = "${var.region}a"
+  availability_zone = "${var.region}${element(["a","b","c","d","e","f"], count.index)}"
   count             = var.subnet_count
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
   # cidrsubnet(prefix, newbits, netnum)
@@ -29,7 +29,7 @@ resource "aws_subnet" "public_subnet" {
 
 resource "aws_subnet" "private_subnet" {
   vpc_id            = aws_vpc.main.id
-  availability_zone = "${var.region}a"
+  availability_zone = "${var.region}${element(["a","b","c","d","e","f"], count.index)}"
   count             = var.subnet_count
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + var.subnet_count)
   tags = {
@@ -52,7 +52,7 @@ resource "aws_internet_gateway" "igw" {
 resource "aws_route_table" "rt_tbl" {
   vpc_id = aws_vpc.main.id
   route {
-    cidr_block = "0.0.0.0/16"
+    cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
   tags = {
@@ -114,8 +114,8 @@ resource "aws_security_group" "sg_vpc_main" {
 resource "aws_instance" "ec2_public" {
   ami                    = var.instance_ami
   instance_type          = var.instance_type
-  count                  = var.instance_count
-  subnet_id              = aws_subnet.public_subnet[count.index].id
+  count                  = var.instance_count*var.subnet_count
+  subnet_id              = aws_subnet.public_subnet[floor(count.index/var.instance_count)].id
   key_name               = "vockey"
   vpc_security_group_ids = [aws_security_group.sg_vpc_main.id]
   tags = {
@@ -127,8 +127,8 @@ resource "aws_instance" "ec2_public" {
 resource "aws_instance" "ec2_private" {
   ami                    = var.instance_ami
   instance_type          = var.instance_type
-  count                  = var.instance_count
-  subnet_id              = aws_subnet.private_subnet[count.index].id
+  count                  = var.instance_count*var.subnet_count
+  subnet_id              = aws_subnet.private_subnet[floor(count.index/var.instance_count)].id
   vpc_security_group_ids = [aws_security_group.sg_vpc_main.id]
   key_name               = "vockey"
   tags = {
@@ -146,10 +146,10 @@ resource "random_id" "suffix" {
 
 resource "aws_s3_bucket" "s3_bucket" {
   count = var.create_s3_bucket ? 1 : 0 # Conditional ternari structure. 
+  # Bucket name must be unique in the whole AWS structure so we use a random_id generator to avoid issues.
+  bucket = "${var.project_name}-bucket-${random_id.suffix.hex}"
   tags = {
-    Name   = "Bucket"
-    bucket = "${var.project_name}-bucket-${random_id.suffix.hex}"
-    # Bucket name must be unique in the whole AWS structure so we use a random_id generator to avoid issues.
+    Name = "${var.project_name}_s3_bucket"
     Project = var.project_name
   }
 }
