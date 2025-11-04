@@ -1,22 +1,49 @@
+# ---------- LOCALS ----------
+# Allows you to define intermediate values to reuse through the configuration
+# It doesn't create resources by itself
+# Helps you build complex structures suchs as maps or lists
 locals {
+  azs = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"] # List with all the azs
+
   public_subnets = {
-    for i in range(var.var.subnet_count) :
-    "public_${i + 1}" => {
+    # Generates a map (key, values[]) that contains the subnets 
+    for i in range(var.subnet_count) :
+    "public_${local.azs[i]}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i)
-      az   = "us-east-1${element(["a", "b", "c", "d"], i)}"
+      az   = "${local.azs[i]}"
     }
   }
 
   private_subnets = {
     for i in range(var.subnet_count) :
-    "private_${i + 1}" => {
+    "private_${local.azs[i]}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i + var.subnet_count)
-      az   = "us-east-1${element(["a", "b", "c", "d"], i)}"
+      az   = "${local.azs[i]}"
     }
   }
+
+  # The nested for generates a nested list (unusable for a for_each structure, so flatten is used to merge the list of lists into a single list) / flatten([[1,2],[3,4]]) -> [1,2,3,4]
+  # After the flatten each element represents a EC2 instance
+  # [                                                             to    [
+  #   [ {key="public-us-east-1a-1", subnet_id="...", number=1},           {key="public-us-east-1a-1", subnet_id="...", number=1},
+  #     {key="public-us-east-1a-2", subnet_id="...", number=2} ],         {key="public-us-east-1a-2", subnet_id="...", number=2},
+  #   [ {key="public-us-east-1b-1", subnet_id="...", number=1},           {key="public-us-east-1b-1", subnet_id="...", number=1},
+  #     {key="public-us-east-1b-2", subnet_id="...", number=2} ]          {key="public-us-east-1b-2", subnet_id="...", number=2}
+  # ]                                                                   ]
+
   public_instances = flatten([
     for subnet_key, subnet in aws_subnet.public_subnet : [
-      for i in range(var.subnet_count) : {
+      for i in range(var.instance_count) : {
+        key       = "${subnet_key}_${i + 1}"
+        subnet_id = subnet.id
+        number    = i + 1
+      }
+    ]
+  ])
+
+  private_instances = flatten([
+    for subnet_key, subnet in aws_subnet.private_subnet : [
+      for i in range(var.instance_count) : {
         key       = "${subnet_key}_${i + 1}"
         subnet_id = subnet.id
         number    = i + 1
@@ -29,7 +56,7 @@ locals {
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr
   tags = {
-    Name    = "${var.project_name}_main_vcp"
+    Name    = "${var.project_name}_main_vpc"
     Project = var.project_name
   }
 }
@@ -39,8 +66,7 @@ resource "aws_subnet" "public_subnet" {
   for_each                = local.public_subnets
   vpc_id                  = aws_vpc.main.id
   availability_zone       = each.value.az
-  cidr_block              = each.value.cidir
-  count                   = var.subnet_count
+  cidr_block              = each.value.cidr
   map_public_ip_on_launch = true
   tags = {
     Name    = "${var.project_name}_${each.key}"
@@ -48,12 +74,11 @@ resource "aws_subnet" "public_subnet" {
   }
 }
 
-resource "aws_subnet" "public_subnet" {
+resource "aws_subnet" "private_subnet" {
   for_each          = local.private_subnets
   vpc_id            = aws_vpc.main.id
   availability_zone = each.value.az
-  cidr_block        = each.value.cidir
-  count             = var.subnet_count
+  cidr_block        = each.value.cidr
   tags = {
     Name    = "${var.project_name}_${each.key}"
     Project = var.project_name
@@ -74,7 +99,7 @@ resource "aws_internet_gateway" "igw" {
 resource "aws_route_table" "rt_tbl" {
   vpc_id = aws_vpc.main.id
   route {
-    cidr_block = "0.0.0.0/16"
+    cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
   tags = {
@@ -107,11 +132,11 @@ resource "aws_security_group" "sg_vpc_main" {
   }
 
   ingress {
-    description = "Allow SSH from my home IP & HS IP"
+    description = "Allow SSH from my home IP & school IP"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip] # Ometem que es la IP real y no 0.0.0.0
+    cidr_blocks = [var.my_ip]
   }
 
   ingress {
@@ -133,38 +158,52 @@ resource "aws_security_group" "sg_vpc_main" {
 
 # ---------- EC2 INSTANCES ----------
 resource "aws_instance" "ec2_public" {
-  for_each               = { for obj in local.public_instances : obj.key => obj }
+  for_each = { for obj in local.public_instances : obj.key => obj }
+  # for each (obj) in local.public_instances, use obj.key as the key, and store the whole object as value. That helps to easly reference the object.
+  #   {
+  #   "public-us-east-1a-1" = {subnet_id="...", number=1, key="..."},
+  #   "public-us-east-1a-2" = {subnet_id="...", number=2, key="..."},
+  #   "public-us-east-1b-1" = {subnet_id="...", number=1, key="..."},
+  #   "public-us-east-1b-2" = {subnet_id="...", number=2, key="..."}
+  # }
   ami                    = var.instance_ami
   instance_type          = var.instance_type
-  subnet_id              = each.value.id
+  subnet_id              = each.value.subnet_id
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.sg_vpc_main.id]
   tags = {
-    Name    = "${var.project_name}_ec2_${each.value}_instance"
+    Name    = each.key
     Project = var.project_name
   }
 }
 
 resource "aws_instance" "ec2_private" {
-  for_each               = aws_subnet.public_subnet
+  for_each = { for obj in local.private_instances : obj.key => obj }
+
   ami                    = var.instance_ami
   instance_type          = var.instance_type
-  subnet_id              = aws_subnet.private_subnet[count.index].id
+  subnet_id              = each.value.subnet_id
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.sg_vpc_main.id]
   tags = {
-    Name    = "${var.project_name}_ec2_${each.value}_instance"
+    Name    = each.key
     Project = var.project_name
   }
 }
 
 
 # ---------- S3 BUCKET ----------
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 resource "aws_s3_bucket" "s3_bucket" {
-  count  = var.create_s3_bucket ? 1 : 0 # Conditional ternari structure. 
-  bucket = "${var.project_name}-bucket" # Must be unique in the whole AWS structure
+  count = var.create_s3_bucket ? 1 : 0 # Conditional ternari structure. 
+  # Bucket name must be unique in the whole AWS structure so we use a random_id generator to avoid issues.
+  bucket = "${var.project_name}-bucket-${random_id.suffix.hex}"
   tags = {
-    Name    = "Bucket"
+    Name = "${var.project_name}_Bucket"
+
     Project = var.project_name
   }
 }

@@ -35,3 +35,28 @@ output "s3_bucket_name" {
   value       = var.create_s3_bucket ? aws_s3_bucket.s3_bucket[0].bucket : "S3 bucket creation is set to false"
 }
 
+
+
+output "public_instance_ips" {
+  description = "Public and private IPs of public EC2 instances"
+  value = {
+    for k, inst in aws_instance.ec2_public :
+    k => {
+      public_ip  = inst.public_ip
+      private_ip = inst.private_ip
+    }
+  }
+}
+
+output "private_instance_ips" {
+  description = "Private IPs of private EC2 instances"
+  value = {
+    for k, inst in aws_instance.ec2_private :
+    k => inst.private_ip
+  }
+}
+
+output "s3_bucket_name" {
+  description = "Name of S3 bucket if created"
+  value       = try(aws_s3_bucket.s3_bucket[0].bucket, null)
+}

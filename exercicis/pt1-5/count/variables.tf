@@ -13,13 +13,13 @@ variable "project_name" {
 variable "instance_count" {
   type        = number
   description = "n instances/subnet"
-  default = 2
+  default     = 2
 }
 
 variable "subnet_count" {
   type        = number
   description = "n subnets/vpc"
-  default = 2
+  default     = 2
 }
 
 variable "instance_type" {
