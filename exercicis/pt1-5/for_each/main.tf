@@ -1,13 +1,21 @@
 # ---------- LOCALS ----------
-# Allows you to define intermediate values to reuse through the configuration
-# It doesn't create resources by itself
-# Helps you build complex structures suchs as maps or lists
-locals {
-  azs = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"] # List with all the azs
+# Locals allow you to define intermediate values to reuse throughout the configuration.
+# They don't create resources by themselves.
+# They are commonly used to build complex structures such as lists or maps that will be used later in resources.
 
+locals {
+    # List containing all Availability Zones within the region
+  azs = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
+
+  # Map that defines the public subnets.
+  # To generate a map: map_key => value // {map_key = value}
+  # The for-expression dynamically generates a map in the format:
+  # {
+  #   "public-us-east-1a" = { cidr = "10.0.0.0/24", az = "us-east-1a" },
+  #   "public-us-east-1b" = { cidr = "10.0.1.0/24", az = "us-east-1b" }
+  # }
+  # Each key corresponds to one subnet, and each value is an object containing its CIDR and AZ.
   public_subnets = {
-    # "key => value" in the for loop dinamically generates a map {public_us-east-1a => {cidr"...", az="..."}, that contains the subnets 
-    #                                                             public_us-east-1b => {cidr"...", az="..."}}
     for i in range(var.subnet_count) :
     "public_${local.azs[i]}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i)
@@ -15,6 +23,8 @@ locals {
     }
   }
 
+  # Same logic as above but for private subnets.
+  # The index is offset by +var.subnet_count to ensure that the CIDR ranges don't overlap with the public ones.
   private_subnets = {
     for i in range(var.subnet_count) :
     "private_${local.azs[i]}" => {
@@ -23,8 +33,11 @@ locals {
     }
   }
 
+  # Nested for loops generate a list of lists of objects.
+  # Each object represents an EC2 instance configuration for a given subnet.
+  # Because for_each cannot iterate over lists of lists, flatten() merges them into a single list.
+  # Example: flatten([[1,2],[3,4]]) -> [1,2,3,4]
   public_instances = flatten([
-  # The nested for generates a list of lists of objects (unusable for a for_each structure, so flatten is used to merge the lists into a single list that contains all the objects) / flatten([[1,2],[3,4]]) -> [1,2,3,4]
     for subnet_key, subnet in aws_subnet.public_subnet : [
       for i in range(var.instance_count) : {
         key       = "${subnet_key}_${i + 1}"
@@ -32,15 +45,15 @@ locals {
       }
     ]
   ])
-
-  # After the flatten each element represents a EC2 instance
+  # After the flatten, each element in the list represents a single EC2 instance:
   # [                                                             to    [
   #   [ {key="public-us-east-1a-1", subnet_id="...", number=1},           {key="public-us-east-1a-1", subnet_id="...", number=1},
   #     {key="public-us-east-1a-2", subnet_id="...", number=2} ],         {key="public-us-east-1a-2", subnet_id="...", number=2},
   #   [ {key="public-us-east-1b-1", subnet_id="...", number=1},           {key="public-us-east-1b-1", subnet_id="...", number=1},
   #     {key="public-us-east-1b-2", subnet_id="...", number=2} ]          {key="public-us-east-1b-2", subnet_id="...", number=2}
   # ]                                                                   ]
-
+  # Each object contains its unique key, the subnet ID where it will be deployed, and an internal counter.
+  
   private_instances = flatten([
     for subnet_key, subnet in aws_subnet.private_subnet : [
       for i in range(var.instance_count) : {
@@ -52,6 +65,8 @@ locals {
 }
 
 # ---------- VPC ----------
+# Defines the main Virtual Private Cloud.
+# The CIDR block is provided via variables and used to derive subnets later.
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr
   tags = {
@@ -61,18 +76,23 @@ resource "aws_vpc" "main" {
 }
 
 # ---------- SUBNETS ----------
+# Public subnets definition.
+# for_each iterates over the local map created above (local.public_subnets).
+# Each element in the map represents one subnet and provides its CIDR and Availability Zone.
 resource "aws_subnet" "public_subnet" {
   for_each                = local.public_subnets
   vpc_id                  = aws_vpc.main.id
   availability_zone       = each.value.az
   cidr_block              = each.value.cidr
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = true  # Ensures instances launched here receive a public IP automatically.
   tags = {
     Name    = "${var.project_name}_${each.key}"
     Project = var.project_name
   }
 }
 
+# Private subnets use the same logic, except that map_public_ip_on_launch is not set to true.
+# This keeps them isolated from the public Internet.
 resource "aws_subnet" "private_subnet" {
   for_each          = local.private_subnets
   vpc_id            = aws_vpc.main.id
@@ -85,6 +105,7 @@ resource "aws_subnet" "private_subnet" {
 }
 
 # ---------- INTERNET GATEWAY ----------
+# The Internet Gateway allows outbound Internet access for public subnets.
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
   tags = {
@@ -95,6 +116,8 @@ resource "aws_internet_gateway" "igw" {
 }
 
 # ---------- ROUTE TABLE ----------
+# Defines a routing table that directs 0.0.0.0/0 (all outbound traffic) to the Internet Gateway.
+# Only public subnets will be associated with this route table.
 resource "aws_route_table" "rt_tbl" {
   vpc_id = aws_vpc.main.id
   route {
@@ -108,6 +131,8 @@ resource "aws_route_table" "rt_tbl" {
 }
 
 # ---------- ROUTING TABLE ASSOCIATIONS ----------
+# Associates each public subnet with the routing table above.
+# This ensures that instances inside those subnets can reach the Internet.
 resource "aws_route_table_association" "rta" {
   for_each       = aws_subnet.public_subnet
   route_table_id = aws_route_table.rt_tbl.id
@@ -115,6 +140,11 @@ resource "aws_route_table_association" "rta" {
 }
 
 # ---------- SECURITY GROUP ----------
+# Security Group defining the inbound and outbound rules for all EC2 instances.
+# - Allows HTTP from anywhere (port 80)
+# - Allows SSH only from a specified IP (var.my_ip)
+# - Allows ICMP (ping) only within the VPC range
+# - Allows all outbound traffic
 resource "aws_security_group" "sg_vpc_main" {
   vpc_id = aws_vpc.main.id
   tags = {
@@ -147,7 +177,7 @@ resource "aws_security_group" "sg_vpc_main" {
   }
 
   egress {
-    description = "Allow any outgoing traffic"
+    description = "Allow any outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -156,15 +186,21 @@ resource "aws_security_group" "sg_vpc_main" {
 }
 
 # ---------- EC2 INSTANCES ----------
+# Each instance is created using for_each based on the local.public_instances list.
+# A map comprehension converts the list of objects into a map where:
+# - The key is obj.key (unique identifier for each instance)
+# - The value is the entire object (containing subnet_id and other fields)
+# This allows for easy referencing with each.key and each.value.<attribute>.
+#
+# obj format example:
+#   {
+#   "public-us-east-1a-1" = {subnet_id="...", number=1, key="..."},
+#   "public-us-east-1a-2" = {subnet_id="...", number=2, key="..."},
+#   "public-us-east-1b-1" = {subnet_id="...", number=1, key="..."},
+#   "public-us-east-1b-2" = {subnet_id="...", number=2, key="..."}
+#   }
 resource "aws_instance" "ec2_public" {
   for_each = { for obj in local.public_instances : obj.key => obj }
-  # for each (obj) in local.public_instances, use obj.key as the key, and store the whole object as value. That helps to easly reference the object.
-  #   {
-  #   "public-us-east-1a-1" = {subnet_id="...", number=1, key="..."},
-  #   "public-us-east-1a-2" = {subnet_id="...", number=2, key="..."},
-  #   "public-us-east-1b-1" = {subnet_id="...", number=1, key="..."},
-  #   "public-us-east-1b-2" = {subnet_id="...", number=2, key="..."}
-  # }
   ami                    = var.instance_ami
   instance_type          = var.instance_type
   subnet_id              = each.value.subnet_id
@@ -176,6 +212,8 @@ resource "aws_instance" "ec2_public" {
   }
 }
 
+# Same logic as the public instances, but deployed in private subnets.
+# These instances have no public IPs and are intended for internal-only workloads.
 resource "aws_instance" "ec2_private" {
   for_each = { for obj in local.private_instances : obj.key => obj }
 
@@ -192,13 +230,15 @@ resource "aws_instance" "ec2_private" {
 
 
 # ---------- S3 BUCKET ----------
+# Random ID is generated to ensure the bucket name is globally unique.
 resource "random_id" "suffix" {
   byte_length = 4
 }
 
+# S3 bucket creation is conditional.
+# If var.create_s3_bucket = true, it will create one bucket with a random suffix.
 resource "aws_s3_bucket" "s3_bucket" {
   count = var.create_s3_bucket ? 1 : 0 # Conditional ternari structure. 
-  # Bucket name must be unique in the whole AWS structure so we use a random_id generator to avoid issues.
   bucket = "${var.project_name}-bucket-${random_id.suffix.hex}"
   tags = {
     Name = "${var.project_name}_s3_bucket"
