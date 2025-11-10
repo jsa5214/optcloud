@@ -1,28 +1,26 @@
-# VPC&Subnets
+# AWS Infrastructure
+## VPC&Subnets
 ![](assets/vpc.png)
 
-# Internet Gateway
+## Internet Gateway
 ![](assets/igw.PNG)
 
-# Routing Tables
-![](assets/routing_table.PNG")
+## Routing Tables
+![](assets/rtbl.PNG")
 
-# Security Groups
-![](assets/security_groups.PNG)
+## Security Groups
+![](assets/sg.PNG)
 
-# Instances
+## Instances
 ![](assets/instances.png)
 
 
 # Checks
 ## SSH Login ec2-a
-![](assets/ssh_login_1.PNG)
-
-## SSH Login ec2-b
-![](assets/ssh_login_2.PNG)
+![](assets/ssh.PNG)
 
 ## Ping
-### It works when pinging one instance to another using private IP's. But it fails when pinging using the public IP's
+### It works withing the VPC (private IP's) but it does't using public
 ![](assets/ping.PNG)
 
 

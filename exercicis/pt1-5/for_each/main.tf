@@ -4,8 +4,8 @@
 # They are commonly used to build complex structures such as lists or maps that will be used later in resources.
 
 locals {
-    # List containing all Availability Zones within the region
-  azs = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
+  # List containing all Availability Zones within the region
+  azs = ["us-east-1a", "us-east-1b"]#, "us-east-1c", "us-east-1d", "us-east-1f"]
 
   # Map that defines the public subnets.
   # To generate a map: map_key => value // {map_key = value}
@@ -17,9 +17,11 @@ locals {
   # Each key corresponds to one subnet, and each value is an object containing its CIDR and AZ.
   public_subnets = {
     for i in range(var.subnet_count) :
-    "public_${local.azs[i]}" => {
+    "public_${i+1}_${element(local.azs, i)}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i)
-      az   = "${local.azs[i]}"
+      # To avoid 'index out of range' errors, use the element function or the % operator
+      az   = element(local.azs, i)
+  #   az   = local.azs[i % length(local.azs)]
     }
   }
 
@@ -27,9 +29,10 @@ locals {
   # The index is offset by +var.subnet_count to ensure that the CIDR ranges don't overlap with the public ones.
   private_subnets = {
     for i in range(var.subnet_count) :
-    "private_${local.azs[i]}" => {
+    "private_${i+1}_${element(local.azs, i)}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i + var.subnet_count)
-      az   = "${local.azs[i]}"
+      az   = element(local.azs, i)
+  #   az   = local.azs[i % length(local.azs)]
     }
   }
 
@@ -53,7 +56,7 @@ locals {
   #     {key="public-us-east-1b-2", subnet_id="...", number=2} ]          {key="public-us-east-1b-2", subnet_id="...", number=2}
   # ]                                                                   ]
   # Each object contains its unique key, the subnet ID where it will be deployed, and an internal counter.
-  
+
   private_instances = flatten([
     for subnet_key, subnet in aws_subnet.private_subnet : [
       for i in range(var.instance_count) : {
@@ -84,7 +87,7 @@ resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.main.id
   availability_zone       = each.value.az
   cidr_block              = each.value.cidr
-  map_public_ip_on_launch = true  # Ensures instances launched here receive a public IP automatically.
+  map_public_ip_on_launch = true # Ensures instances launched here receive a public IP automatically.
   tags = {
     Name    = "${var.project_name}_${each.key}"
     Project = var.project_name
@@ -200,7 +203,7 @@ resource "aws_security_group" "sg_vpc_main" {
 #   "public-us-east-1b-2" = {subnet_id="...", number=2, key="..."}
 #   }
 resource "aws_instance" "ec2_public" {
-  for_each = { for obj in local.public_instances : obj.key => obj }
+  for_each               = { for obj in local.public_instances : obj.key => obj }
   ami                    = var.instance_ami
   instance_type          = var.instance_type
   subnet_id              = each.value.subnet_id
@@ -238,10 +241,10 @@ resource "random_id" "suffix" {
 # S3 bucket creation is conditional.
 # If var.create_s3_bucket = true, it will create one bucket with a random suffix.
 resource "aws_s3_bucket" "s3_bucket" {
-  count = var.create_s3_bucket ? 1 : 0 # Conditional ternari structure. 
+  count  = var.create_s3_bucket ? 1 : 0 # Conditional ternari structure. 
   bucket = "${var.project_name}-bucket-${random_id.suffix.hex}"
   tags = {
-    Name = "${var.project_name}_s3_bucket"
+    Name    = "${var.project_name}_s3_bucket"
     Project = var.project_name
   }
 }
