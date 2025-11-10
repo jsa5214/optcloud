@@ -1,18 +1,18 @@
 # AWS Infrastructure
 ## VPC&Subnets
-![](assets/vpc.png)
+![](assets/vpc.PNG)
 
 ## Internet Gateway
 ![](assets/igw.PNG)
 
 ## Routing Tables
-![](assets/rtbl.PNG")
+![](assets/rtbl.PNG)
 
 ## Security Groups
 ![](assets/sg.PNG)
 
 ## Instances
-![](assets/instances.png)
+![](assets/instances.PNG)
 
 
 # Checks
