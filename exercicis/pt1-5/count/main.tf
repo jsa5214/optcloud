@@ -116,6 +116,8 @@ resource "aws_instance" "ec2_public" {
   instance_type          = var.instance_type
   count                  = var.instance_count*var.subnet_count
   subnet_id              = aws_subnet.public_subnet[floor(count.index/var.instance_count)].id
+# subnet_id              = aws_subnet.public_subnet[count.index%var.instance_count].id
+# Is also valid, but in a 2 instances/subnet 2 subnets configuration, the 3rd instance will belong to us-east-1a instead of us-east-1b, floor generates them "in order"
   key_name               = "vockey"
   vpc_security_group_ids = [aws_security_group.sg_vpc_main.id]
   tags = {
