@@ -16,11 +16,10 @@
 
 
 # Checks
-## SSH Login ec2-a
+## SSH Login
+### Los designios de AWS hace que no funcione pese a que tiene puesto 0.0.0.0/0 como IP
 ![](assets/ssh.PNG)
 
 ## Ping
-### It works withing the VPC (private IP's) but it does't using public
+### It works within the VPC (private IP's) but it does't using the public IP's.
 ![](assets/ping.PNG)
-
-
