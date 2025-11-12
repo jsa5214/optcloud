@@ -5,7 +5,7 @@
 
 locals {
   # List containing all Availability Zones within the region
-  azs = ["us-east-1a", "us-east-1b"]#, "us-east-1c", "us-east-1d", "us-east-1f"]
+  azs = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
 
   # Map that defines the public subnets.
   # To generate a map: map_key => value // {map_key = value}
@@ -17,11 +17,11 @@ locals {
   # Each key corresponds to one subnet, and each value is an object containing its CIDR and AZ.
   public_subnets = {
     for i in range(var.subnet_count) :
-    "public_${i+1}_${element(local.azs, i)}" => {
+    "public_${i + 1}_${element(local.azs, i)}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i)
       # To avoid 'index out of range' errors, use the element function or the % operator
-      az   = element(local.azs, i)
-  #   az   = local.azs[i % length(local.azs)]
+      az = element(local.azs, i)
+      #   az   = local.azs[i % length(local.azs)]
     }
   }
 
@@ -29,10 +29,10 @@ locals {
   # The index is offset by +var.subnet_count to ensure that the CIDR ranges don't overlap with the public ones.
   private_subnets = {
     for i in range(var.subnet_count) :
-    "private_${i+1}_${element(local.azs, i)}" => {
+    "private_${i + 1}_${element(local.azs, i)}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i + var.subnet_count)
       az   = element(local.azs, i)
-  #   az   = local.azs[i % length(local.azs)]
+      #   az   = local.azs[i % length(local.azs)]
     }
   }
 
@@ -140,6 +140,13 @@ resource "aws_route_table_association" "rta" {
   for_each       = aws_subnet.public_subnet
   route_table_id = aws_route_table.rt_tbl.id
   subnet_id      = each.value.id
+
+  # Must create the dependencies first so it doesn't create them in paral·lel and lead to errors.
+  depends_on = [
+    aws_internet_gateway.igw,
+    aws_route_table.rt_tbl
+  ]
+
 }
 
 # ---------- SECURITY GROUP ----------
