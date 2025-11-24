@@ -192,12 +192,49 @@ resource "local_file" "bastion_pem" {
   filename = "bastion.pem"
   content = tls_private_key.bastion_key.private_key_pem
   file_permission = "400"
-  
 }
 
 resource "tls_private_key" "private_instance_key" {
-  for_each = local.private_instances
+  count = var.private_instance_count
   algorithm = "RSA"
   rsa_bits = 4096
-  
+}
+
+resource "aws_key_pair" "private_instance_key_pair" {
+  count = var.private_instance_count
+  public_key = tls_private_key.private_instance_key[count.index].public_key_openssh
+  key_name = "private-${count.index + 1}"
+}
+
+resource "local_file" "private_instance_pem" {
+  count = var.private_instance_count
+  filename = "private-${count.index + 1}.pem"
+  content = tls_private_key.private_instance_key[count.index].private_key_pem
+  file_permission = "400"
+}
+resource "aws_instance" "bastion_instance" {
+  ami                    = var.instance_ami
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.public_subnet.id
+  key_name               = aws_key_pair.bastion_key_pair.key_name
+  associate_public_ip_address = aws_eip.bastion_eip.address
+  vpc_security_group_ids = [aws_security_group.sg_bastion.id, aws_security_group.sg_private.id]
+  tags = {
+    Name    = "bastion-instance"
+    Project = var.project_name
+  }
+}
+
+resource "aws_instance" "ec2_private" {
+  for_each = { for obj in local.private_instances : obj.key => obj }
+
+  ami                    = var.instance_ami
+  instance_type          = var.instance_type
+  subnet_id              = each.value.subnet_id
+  key_name               = var.key_name
+  vpc_security_group_ids = [aws_security_group.sg_vpc_main.id]
+  tags = {
+    Name    = each.key
+    Project = var.project_name
+  }
 }
