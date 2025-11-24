@@ -15,6 +15,12 @@ variable "private_instance_count" {
   default     = 2
 }
 
+variable "allowed_ip" {
+  type = string
+  description = "Allowed IP for SSH"
+  default = "0.0.0.0/0" 
+}
+
 variable "instance_type" {
   type        = string
   description = "Type of instance (t3.micro by default)"
