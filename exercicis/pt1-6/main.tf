@@ -5,21 +5,12 @@ locals {
     for i in range(var.private_instance_count) :
     "private_${i + 1}_${element(local.azs, i)}" => {
       cidr = cidrsubnet(var.vpc_cidr, 8, i + 2) # Offset not to overlap with the bastion CIDR
-      # To avoid 'index out of range' errors, use the element function or the % operator
-      az = element(local.azs, i)
+      # Use of element to avoid 'index out of range' errors.
+      az    = element(local.azs, i)
+      index = i
     }
   }
-
-  private_instances = flatten([
-    for subnet_key, subnet in aws_subnet.private_subnet : [
-      for i in range(var.private_instance_count) : {
-        key       = "${subnet_key}_${i + 1}"
-        subnet_id = subnet.id
-      }
-    ]
-  ])
 }
-
 # ---------- VPC ----------
 # Defines the main Virtual Private Cloud.
 # The CIDR block is provided via variables and used to derive subnets later.
@@ -37,7 +28,7 @@ resource "aws_subnet" "public_subnet" {
   availability_zone = local.azs[0]
   cidr_block        = "10.0.1.0/24"
   tags = {
-    Name    = "${var.project_name}_bastion_us-east-1a_public_subnet"
+    Name    = "${var.project_name}_bastion_us-east-1a"
     Project = var.project_name
   }
 
@@ -177,64 +168,85 @@ resource "aws_security_group" "sg_private" {
   }
 }
 
-# ---------- PAIR KEYS ----------
+# ---------- KEYS ----------
 resource "tls_private_key" "bastion_key" {
   algorithm = "RSA"
-  rsa_bits = 4096
+  rsa_bits  = 4096
 }
 
 resource "aws_key_pair" "bastion_key_pair" {
-  key_name = "bastion-key"
+  key_name   = "bastion-key"
   public_key = tls_private_key.bastion_key.public_key_openssh
 }
 
 resource "local_file" "bastion_pem" {
-  filename = "bastion.pem"
-  content = tls_private_key.bastion_key.private_key_pem
+  filename        = pathexpand("~/.ssh/bastion-key.pem")
+  content         = tls_private_key.bastion_key.private_key_pem
   file_permission = "400"
 }
 
 resource "tls_private_key" "private_instance_key" {
-  count = var.private_instance_count
+  count     = var.private_instance_count
   algorithm = "RSA"
-  rsa_bits = 4096
+  rsa_bits  = 4096
 }
 
 resource "aws_key_pair" "private_instance_key_pair" {
-  count = var.private_instance_count
+  count      = var.private_instance_count
   public_key = tls_private_key.private_instance_key[count.index].public_key_openssh
-  key_name = "private-${count.index + 1}"
+  key_name   = "private-${count.index + 1}"
 }
 
 resource "local_file" "private_instance_pem" {
-  count = var.private_instance_count
-  filename = "private-${count.index + 1}.pem"
-  content = tls_private_key.private_instance_key[count.index].private_key_pem
+  count           = var.private_instance_count
+  filename        = pathexpand("~/.ssh/private-${count.index + 1}.pem")
+  content         = tls_private_key.private_instance_key[count.index].private_key_pem
   file_permission = "400"
 }
+
+# ---------- EC2 INSTANCES ----------
 resource "aws_instance" "bastion_instance" {
   ami                    = var.instance_ami
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public_subnet.id
   key_name               = aws_key_pair.bastion_key_pair.key_name
-  associate_public_ip_address = aws_eip.bastion_eip.address
-  vpc_security_group_ids = [aws_security_group.sg_bastion.id, aws_security_group.sg_private.id]
+  vpc_security_group_ids = [aws_security_group.sg_bastion.id]
   tags = {
-    Name    = "bastion-instance"
+    Name    = "${var.project_name}-bastion-instance"
     Project = var.project_name
   }
 }
 
-resource "aws_instance" "ec2_private" {
-  for_each = { for obj in local.private_instances : obj.key => obj }
+resource "aws_eip_association" "bastion_eip_assoc" {
+  instance_id   = aws_instance.bastion_instance.id
+  allocation_id = aws_eip.bastion_eip.id
+}
 
+resource "aws_instance" "private_instance" {
+  for_each               = local.private_subnets
   ami                    = var.instance_ami
   instance_type          = var.instance_type
-  subnet_id              = each.value.subnet_id
-  key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.sg_vpc_main.id]
+  subnet_id              = aws_subnet.private_subnet[each.key].id
+  key_name               = aws_key_pair.private_instance_key_pair[each.value.index].key_name
+  vpc_security_group_ids = [aws_security_group.sg_private.id]
   tags = {
-    Name    = each.key
+    Name    = "${var.project_name}-private-instance-${each.value.index + 1}"
     Project = var.project_name
   }
+}
+
+# ---------- SSH CONFIG GENERATION ----------
+resource "local_file" "ssh_config" {
+  filename = "ssh_config_per_connect.txt"
+  
+  content = templatefile("ssh_config.tpl", {
+    
+    bastion_name = "bastion"
+    bastion_ip   = aws_eip.bastion_eip.public_ip
+    bastion_key  = local_file.bastion_pem.filename
+    
+    private_ips  = [
+      for k, v in aws_instance.private_instance : v.private_ip
+    ]
+  })
 }
