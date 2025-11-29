@@ -180,7 +180,8 @@ resource "aws_key_pair" "bastion_key_pair" {
 }
 
 resource "local_file" "bastion_pem" {
-  filename        = pathexpand("~/.ssh/bastion-key.pem")
+  filename = pathexpand("~/.ssh/bastion.pem")
+  # pathexpand() to save the local files in the right folder.
   content         = tls_private_key.bastion_key.private_key_pem
   file_permission = "400"
 }
@@ -238,15 +239,52 @@ resource "aws_instance" "private_instance" {
 # ---------- SSH CONFIG GENERATION ----------
 resource "local_file" "ssh_config" {
   filename = "ssh_config_per_connect.txt"
-  
+
   content = templatefile("ssh_config.tpl", {
-    
     bastion_name = "bastion"
     bastion_ip   = aws_eip.bastion_eip.public_ip
     bastion_key  = local_file.bastion_pem.filename
-    
-    private_ips  = [
+
+    private_ips = [
       for k, v in aws_instance.private_instance : v.private_ip
     ]
   })
+}
+
+# ---------- S3 BUCKET ----------
+# Random ID is generated to ensure the bucket name is globally unique.
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
+resource "aws_s3_bucket" "keys_backup_bucket" {
+  bucket = "${var.project_name}-keys-backup-bucket-${random_id.suffix.hex}"
+
+  tags = {
+    Name    = "${var.project_name}_key_backup_bucket"
+    Project = var.project_name
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "s3_bucket_ownership" {
+  bucket = aws_s3_bucket.keys_backup_bucket.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_object" "bastion_pk_backup" {
+  bucket = aws_s3_bucket.keys_backup_bucket.id
+  key = "bastion.pub"
+  content = tls_private_key.bastion_key.public_key_openssh
+  server_side_encryption = "AES256"
+}
+
+resource "aws_s3_object" "private_instance_pk_backup" {
+  count = var.private_instance_count
+  bucket = aws_s3_bucket.keys_backup_bucket.id
+  key = "private-${count.index+1}.pub"
+  content = tls_private_key.private_instance_key[count.index].public_key_openssh
+  server_side_encryption = "AES256"
 }

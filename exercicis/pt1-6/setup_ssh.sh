@@ -1,14 +1,15 @@
 #!/bin/bash
 
-echo "Configuring SSH access ..."
+echo "#### Configuring SSH access ... ####"
 
 CONFIG_FILE="$HOME/.ssh/config"
 GENERATED_CONFIG="ssh_config_per_connect.txt"
 
+# Creating directory just in case it doesn't exist.
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 
-echo "" >> "$CONFIG_FILE"
-echo "# --- Lab Terraform Pt1.6 $(date) ---" >> "$CONFIG_FILE"
+echo -e "\n# --- Lab Terraform Pt1.6 $(date) ---" >> "$CONFIG_FILE"
 cat "$GENERATED_CONFIG" >> "$CONFIG_FILE"
-echo "Configuration compleated!"
+
+echo "#### Configuration compleated! ####"
